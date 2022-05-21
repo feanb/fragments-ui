@@ -1,0 +1,26 @@
+{
+  "name": "fragments-ui",
+  "version": "1.0.0",
+  "description": "Lab 2 for CPP555",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nedanur/fragments-ui.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Nedanur/fragments-ui/issues"
+  },
+  "homepage": "https://github.com/Nedanur/fragments-ui#readme",
+  "devDependencies": {
+    "parcel": "^2.5.0"
+  },
+  "dependencies": {
+    "aws-amplify": "^4.3.22"
+  }
+}
