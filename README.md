@@ -2,6 +2,5 @@
 Lab 2 for CPP555
 
 # to run the server use
-npx parcel src/index.html
+npx parcel index.html
 
-S
