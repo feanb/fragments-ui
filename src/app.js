@@ -1,116 +1,57 @@
 import { Auth, getUser } from './auth';
-import { getUserFragments, getFragmentById, getFragmentByIdInfo, postFragment, updateFragment, deleteFragment } from './api';
+import { getUserFragments, getFragmentById, getFragmentInfoById, postFragment, updateFragment, deleteFragment } from './api';
 
 async function init() {
-  // Get our UI elements
+
+  //Handle user UI
   const userSection = document.querySelector('#user');
   const loginBtn = document.querySelector('#login');
   const logoutBtn = document.querySelector('#logout');
-
-  // Wire up event handlers to deal with login and logout.
   loginBtn.onclick = () => {
-    // Sign-in via the Amazon Cognito Hosted UI (requires redirects), see:
-    // https://docs.amplify.aws/lib/auth/advanced/q/platform/js/#identity-pool-federation
     Auth.federatedSignIn();
   };
 
   logoutBtn.onclick = () => {
-    // Sign-out of the Amazon Cognito Hosted UI (requires redirects), see:
-    // https://docs.amplify.aws/lib/auth/emailpassword/q/platform/js/#sign-out
     Auth.signOut();
   };
-
-  // See if we're signed in (i.e., we'll have a `user` object)
   const user = await getUser();
   if (!user) {
-    // Disable the Logout button
     logoutBtn.disabled = true;
     return;
   }
-
-  // Log the user info for debugging purposes
   console.log({ user });
-
   await getUserFragments(user, 1);
-
-  // Update the UI to welcome the user
   userSection.hidden = false;
-
-  // Show the user's username
   userSection.querySelector('.username').innerText = user.username;  
-  
-  // Disable the Login button
   loginBtn.disabled = true;
 
-  const existingFragmentsSection = document.querySelector('#existingFragmentsSection');
-  const selectTypeSection = document.querySelector('#type');
-  const fileImportSection = document.querySelector('#fileImport');
-  const convertTypeFormSection = document.querySelector('#convertType');
-  const metadataSection = document.querySelector('#metadataSection');
-
-  const convertTypeForm = document.getElementById('convertTypeForm');
+  //To figure it out which is which
+  const current = document.querySelector('#current');
+  const selectSection = document.querySelector('#type');
+  const importSec = document.querySelector('#fileImport');
+  const convertTypes = document.querySelector('#convertType');
+  const mData = document.querySelector('#metadataSection');
+  const ctype = document.getElementById('convertTypeForm');
   const img = document.getElementById('imageFragment');
-  const deleteBtn = document.getElementById('deleteBtn');
-  const fragmentToDisplay = document.getElementById('fragment');
-  const metadataToDisplay = document.getElementById('metadata');
 
-  // default feature is create
-  let selectedFeature = 'create';
-  // selected fragment for update
-  let selectedFragment = {};
+  //Buttons
+  const deleteBtn = document.getElementById('deleteBtn');
+  const createBtn = document.getElementById('createBtn');
+
+  const fDisplay = document.getElementById('fragment');
+  const mDataDisplay = document.getElementById('metadata');
+
+  let feautures = 'create';
+  let theFragment = {};
   let selectedType = 'text/plain';
 
-  // select what to do: create/update/delete
-  document.getElementById('features').addEventListener('change', async function(e) {
-    e.preventDefault();
-    selectedFeature = e.target.value;
-    console.log('selected feature: ' + selectedFeature);
 
-    // remove fragment value displayed before
-    img.src = '';   
-    fragmentToDisplay.innerHTML = '';
-    metadataToDisplay.innerText = '';
-    metadataSection.style.display = 'none';
-
-    if (selectedFeature === 'view') {
-      convertTypeFormSection.style.display = 'inline-block';
-    } else {
-      convertTypeFormSection.style.display = 'none';
-    }
-
-    if (selectedFeature === 'delete') {
-      deleteBtn.style.display = 'inline-block';
-    } else {
-      deleteBtn.style.display = 'none';
-    }
-
-    if (selectedFeature !== 'create') {
-      const fragments = await getUserFragments(user, 1);
-      document.getElementById('existingFragmentsLbl').innerText = `Choose a fragment to ${selectedFeature}`;
-      
-      removeFragmentsOptions();
-      // fill the options to select existing fragment to view/update/delete
-      await fillFragmentsOptions(fragments.data.fragments);
-      existingFragmentsSection.style.display='inline-block';
-      selectTypeSection.style.display='none';
-
-      if (selectedFeature === 'update') {
-        fileImportSection.style.display='block';
-      } else {
-        fileImportSection.style.display='none';
-      }
-    } else {
-      existingFragmentsSection.style.display='none';
-      selectTypeSection.style.display='block';
-      fileImportSection.style.display='block';
-    }
-  });
-
+  //button implementations
   deleteBtn.onclick = async () => {
     try {
-      const deleted = await deleteFragment(user, selectedFragment.id);
+      const deleted = await deleteFragment(user, theFragment.id);
       if (deleted.status === 'ok') {
-        fragmentToDisplay.innerHTML = `Fragment with id: ${selectedFragment.id} has been successfully deleted.`;
+        alert('Fragment has been deleted.');
       }
       
     } catch (e) {
@@ -118,9 +59,44 @@ async function init() {
     }
   }
 
-  // fill the options to select existing fragment to view/update/delete
+  createBtn.onclick = async () => {
+    try {
+      if (feautures === 'create') {
+        fragment = await postFragment(user, e.target.result, f.type);
+      } else {
+        fragment = await updateFragment(user, e.target.result, theFragment.id, f.type);
+      }
+      if (fragment) {
+          alert('Fragment has been added/updated');
+     }
+    } catch (e) {
+      alert('There was a error');
+    }
+  }
+
+  //GET ELEMENT ID DOM
+  document.getElementById('existingFragments').addEventListener('change', function(e) {
+    e.preventDefault();
+    if (e.target.value === 'Select a fragment') {
+      alert('Please select');
+    } else {
+      theFragment = JSON.parse(e.target.value);
+      const selectedFragmentId = theFragment.id;
+      selectedType = theFragment.type;
+      console.log('selected fragment: ' + selectedFragmentId);
+    }
+  });
+  document.getElementById('types').addEventListener('change', function(e) {
+    e.preventDefault();
+    selectedType = e.target.value;
+    console.log('selected type: ' + selectedType);
+  });
+
+  const inputEl = document.getElementById('inputFile');
+  inputEl?.addEventListener('change', handleFile);
+
+  //async func
   function fillFragmentsOptions(fragments) {
-    // sort by updated value: for when working with DynamoDB
     fragments.sort(function(a,b){
       return new Date(b.updated) - new Date(a.updated);
     });
@@ -135,124 +111,132 @@ async function init() {
     }
   }
 
-  // remove fragments options
+  //DISPLAYING FEAUTUES
+  async function displayFragment(id, selectedConversionType) {
+    try {
+      while (fDisplay.firstChild) {
+        fDisplay.removeChild(fDisplay.firstChild);
+      }
+      fDisplay.innerText = '';
+      img.src = '';
+      const { contentType, data } = await getFragmentById(user, id, selectedConversionType);
+      const metadata = await getFragmentInfoById(user, id);
+      if (metadata) {
+        mData.style.display = 'block';
+        mDataDisplay.innerHTML = JSON.stringify(metadata);
+      }
+      if (contentType.startsWith('image/')) {
+        img.src = URL.createObjectURL(data);  
+      } else if (contentType.startsWith('text/html')) {
+        fDisplay.insertAdjacentHTML('afterbegin',data);
+      } else {
+        fDisplay.innerText = typeof data === 'object' ? JSON.stringify(data) : data;
+      }
+    } catch (e) {
+      alert('There was a error');
+      mData.style.display = 'none';
+    }
+  }
+
   function removeFragmentsOptions() {
     const select = document.getElementById('existingFragments');
     while (select.lastChild.id !== 'default') {
       select.removeChild(select.lastChild);
     }
   }
-  
-  // event handler when user selects an existing fragment
-  document.getElementById('existingFragments').addEventListener('change', function(e) {
+
+  document.getElementById('features').addEventListener('change', async function(e) {
     e.preventDefault();
-    if (e.target.value === 'Select a fragment') {
-      fragmentToDisplay.innerHTML = 'Please select a fragment';
+    feautures = e.target.value;
+    console.log('selected feature: ' + feautures);
+    img.src = '';   
+    fDisplay.innerHTML = '';
+    mDataDisplay.innerText = '';
+    mData.style.display = 'none';
+
+    if (feautures === 'view') {
+      convertTypes.style.display = 'inline-block';
     } else {
-      // console.log(JSON.parse(e.target.value));
-      selectedFragment = JSON.parse(e.target.value);
-      const selectedFragmentId = selectedFragment.id;
-      selectedType = selectedFragment.type;
-      console.log('selected fragment: ' + selectedFragmentId);
+      convertTypes.style.display = 'none';
     }
-  });
+    if (feautures === 'create') {
+      createBtn.style.display = 'inline-block';
+    } else {
+      createBtn.style.display = 'none';
+    }
 
-  // event handler when user selects to create fragment
-  document.getElementById('types').addEventListener('change', function(e) {
-    e.preventDefault();
-    selectedType = e.target.value;
-    console.log('selected type: ' + selectedType);
-  });
+    if (feautures === 'delete') {
+      deleteBtn.style.display = 'inline-block';
+    } else {
+      deleteBtn.style.display = 'none';
+    }
 
-  async function displayFragment(id, selectedConversionType) {
-    try {
-      // delete fragment displayed before
-      while (fragmentToDisplay.firstChild) {
-        fragmentToDisplay.removeChild(fragmentToDisplay.firstChild);
-      }
-      fragmentToDisplay.innerText = '';
-      img.src = '';
+    if (feautures !== 'create') {
+      const fragments = await getUserFragments(user, 1);
 
-      const { contentType, data } = await getFragmentById(user, id, selectedConversionType);
-      const metadata = await getFragmentByIdInfo(user, id);
-      if (metadata) {
-        metadataSection.style.display = 'block';
-        metadataToDisplay.innerHTML = JSON.stringify(metadata);
-      }
-      if (contentType.startsWith('image/')) {
-        img.src = URL.createObjectURL(data);  
-      } else if (contentType.startsWith('text/html')) {
-        fragmentToDisplay.insertAdjacentHTML('afterbegin',data);
+      document.getElementById('existingFragmentsLbl').innerText = `Choose a fragment to ${feautures}`;
+      removeFragmentsOptions();
+
+      await fillFragmentsOptions(fragments.data.fragments);
+    
+      current.style.display='inline-block';
+      selectSection.style.display='none';
+
+      if (feautures === 'update') {
+        importSec.style.display='block';
       } else {
-        fragmentToDisplay.innerText = typeof data === 'object' ? JSON.stringify(data) : data;
+        importSec.style.display='none';
       }
-    } catch (e) {
-      console.error('Get by id failed after post through file: ', { e });
-      fragmentToDisplay.innerText = e;
-      metadataSection.style.display = 'none';
+    } else {
+      selectSection.style.display='block';
+      importSec.style.display='block';
     }
-  }
+    
+  });
 
-  convertTypeForm.addEventListener('submit', (e) => handleConvertTypeForm(e));
-
-  // for a2, only support md -> html conversion.
+  ctype.addEventListener('submit', (e) => handleConvertTypeForm(e));
   async function handleConvertTypeForm(e, id) {
     e.preventDefault();
-    fragmentToDisplay.innerText = '';
+    fDisplay.innerText = '';
     const selectedConversionType = document.getElementById('convertTypes').value;
     let fragmentId;
-    if (selectedFeature === 'view') {
-      fragmentId = selectedFragment.id;
+    if (feautures === 'view') {
+      fragmentId = theFragment.id;
     } else {
       fragmentId = id;
     }
-    console.log('selected feature:' + selectedFeature);
-    console.log('id:' + fragmentId);
-    console.log('selected conversion extension: ' + document.getElementById('convertTypes').value);
-    //use the most recently added fragment's id
+    console.log('selected feature:' + feautures);
     displayFragment(fragmentId, selectedConversionType);
   }
 
-  const inputEl = document.getElementById('inputFile');
-  inputEl?.addEventListener('change', handleFile);
-
   function handleFile(evt) {
-    const files = evt.target.files; // FileList object
+    const files = evt.target.files; 
     const f = files[0];
     const reader = new FileReader();    
-    fragmentToDisplay.innerText = '';
-
-    // Capture the file information
     reader.onload = (function() {
       return async function(e) {
         console.log('uploaded file type: ' + f.type);
- 
         if (selectedType && selectedType !== f.type) {
-          alert('Uploaded file type must be same as selected type.');
+          alert('File type must be same.');
         } else {
-          console.log('selected feature: ' + selectedFeature);
-
           let fragment;
 
           try {
-            if (selectedFeature === 'create') {
+            if (feautures === 'create') {
               fragment = await postFragment(user, e.target.result, f.type);
             } else {
-              fragment = await updateFragment(user, e.target.result, selectedFragment.id, f.type);
+              fragment = await updateFragment(user, e.target.result, theFragment.id, f.type);
             }
             if (fragment) {
-              fragmentToDisplay.innerHTML = `Fragment of type ${fragment.fragment.type} with id: ${fragment.fragment.id} is ${selectedFeature}d!`;
-            }
+                alert('Fragment has been added/updated');
+           }
           } catch (e) {
-            fragmentToDisplay.innerText = e;
+            alert('There was a error');
           }
         }
       };
     })(f);
-
     reader.readAsArrayBuffer(f);
   }
 }
-
-// Wait for the DOM to be ready, then start the app
 addEventListener('DOMContentLoaded', init);
